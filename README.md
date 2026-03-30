@@ -1,1 +1,160 @@
 # Converter_.webm
+
+Универсальный локальный конвертер видео в популярные форматы с web-интерфейсом.
+
+Проект запускается через Docker, использует `FFmpeg`/`ffprobe` для реальной конвертации и показывает прогресс задач в браузере.
+
+## Возможности
+
+- загрузка одного или нескольких `.webm` файлов;
+- конвертация в `mp4`, `mkv`, `avi`, `mov`, `mpeg`, `gif`;
+- профили качества: `source-like`, `high`, `balanced`, `small`;
+- очередь задач с ограничением параллелизма;
+- прогресс по каждой задаче (статус, процент, ETA, сообщения);
+- скачивание каждого результата отдельно;
+- скачивание нескольких результатов одним ZIP;
+- отмена/удаление задач;
+- базовая локализация UI (`EN`/`RU`) и светлая/темная тема;
+- автоочистка старых файлов по TTL.
+
+## Стек
+
+- **Backend:** FastAPI (Python 3.12)
+- **Video engine:** FFmpeg / ffprobe
+- **Frontend:** React + Vite
+- **Контейнеризация:** Docker + docker compose
+
+## Требования
+
+- Docker Desktop (Windows/macOS) или Docker Engine + Compose (Linux)
+- минимум 2 CPU, 4 GB RAM рекомендуется для комфортной конвертации
+- свободное место на диске под входные и выходные видео
+
+## Быстрый запуск
+
+1. Клонируйте репозиторий:
+
+```bash
+git clone https://github.com/VRainD/Converter_.webm.git
+cd Converter_.webm
+```
+
+2. Создайте файл окружения:
+
+```bash
+cp .env.example .env
+```
+
+Для Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+3. Запустите приложение:
+
+```bash
+docker compose up --build
+```
+
+4. Откройте в браузере:
+
+- `http://localhost:8080`
+
+5. Остановка:
+
+```bash
+docker compose down
+```
+
+## Запуск в фоне
+
+```bash
+docker compose up --build -d
+docker compose ps
+docker compose logs -f
+```
+
+## Настройка через `.env`
+
+Основные параметры:
+
+- `APP_PORT` — порт приложения (по умолчанию `8080`)
+- `MAX_UPLOAD_MB` — лимит размера одного загружаемого файла
+- `MAX_CONCURRENT_JOBS` — сколько задач конвертировать одновременно
+- `JOB_RETENTION_HOURS` — TTL завершенных задач/файлов
+- `TEMP_RETENTION_HOURS` — TTL временных файлов
+- `LOG_LEVEL` — уровень логирования (`INFO`, `DEBUG`, ...)
+- `ENABLE_ADVANCED_OPTIONS` — показать advanced-блок в UI
+- `DEFAULT_OUTPUT_FORMAT` — формат по умолчанию
+- `DEFAULT_QUALITY_PROFILE` — профиль качества по умолчанию
+- `GIF_MAX_DURATION_SEC` — ограничение длины для GIF
+- `FFMPEG_TIMEOUT_SEC` — таймаут одной конвертации
+
+## Как пользоваться
+
+1. Откройте главную страницу.
+2. Перетащите `.webm` файлы или выберите через диалог.
+3. Выберите формат и профиль качества.
+4. При необходимости откройте `Advanced` и задайте resolution/fps/audio.
+5. Нажмите **Convert**.
+6. Отслеживайте статус задачи в списке.
+7. После завершения скачайте файл или ZIP для нескольких результатов.
+
+## Структура данных
+
+Данные сохраняются в `./data`:
+
+- `data/uploads` — загруженные исходники до/во время обработки
+- `data/outputs` — результаты конвертации
+- `data/temp` — временные файлы
+- `data/logs` — логи приложения и задач
+
+## API (основные endpoint'ы)
+
+- `GET /api/health`
+- `GET /api/settings`
+- `GET /api/status`
+- `POST /api/upload`
+- `GET /api/uploads/{upload_id}/metadata`
+- `POST /api/jobs`
+- `GET /api/jobs`
+- `GET /api/jobs/{job_id}`
+- `GET /api/jobs/{job_id}/events` (SSE progress)
+- `POST /api/jobs/{job_id}/cancel`
+- `DELETE /api/jobs/{job_id}`
+- `GET /api/jobs/{job_id}/download`
+- `GET /api/jobs/download-zip?ids=...`
+
+## Ограничения и важные замечания
+
+- основной входной формат: `.webm`;
+- `AVI` может давать большие файлы и хуже совместимость;
+- `GIF` без аудио и сильно растет по размеру на длинных роликах;
+- скорость зависит от кодеков, длительности и параметров качества;
+- очень большие файлы требуют достаточно места в `data/outputs`.
+
+## Диагностика
+
+Проверить состояние контейнера:
+
+```bash
+docker compose ps
+```
+
+Смотреть логи:
+
+```bash
+docker compose logs -f
+```
+
+Проверка health:
+
+```bash
+curl http://localhost:8080/api/health
+```
+
+## Описание проекта
+
+**Converter_.webm** — это универсальный конвертер видео в популярные форматы для локального использования.  
+Он ориентирован на простой пользовательский сценарий: загрузить файл, выбрать параметры, получить результат без ручной работы с FFmpeg в терминале.
