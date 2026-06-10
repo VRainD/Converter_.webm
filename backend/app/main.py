@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import health, jobs, upload
 from app.config import get_settings
+from app.version import APP_VERSION
 from app.services.cleanup import run_retention_loop
 from app.services.job_manager import JobManager
 from app.services.storage import StorageService
@@ -40,8 +41,8 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(
-        title="WebM Converter",
-        version="1.0.0",
+        title="Video Converter",
+        version=APP_VERSION,
         lifespan=lifespan,
         debug=settings.debug,
     )

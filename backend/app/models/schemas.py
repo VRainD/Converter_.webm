@@ -8,6 +8,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 
 from app.formats import normalize_output_format
+from app.version import APP_VERSION
 
 
 class JobStatus(str, Enum):
@@ -151,7 +152,7 @@ class HealthResponse(BaseModel):
     status: str
     ffmpeg_available: bool
     ffprobe_available: bool
-    version: str = "1.0.0"
+    version: str = APP_VERSION
 
 
 class ErrorResponse(BaseModel):
