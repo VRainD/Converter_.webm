@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from app.config import Settings
+from app.formats import NO_AUDIO_TRACK_ERROR, is_audio_only_output, output_file_extension
 from app.models.schemas import (
     AdvancedOptions,
     CreateJobsRequest,
@@ -90,8 +91,8 @@ class JobManager:
             rec.public.updated_at = _utcnow()
             return
 
-        upload_path = self._storage.upload_path(rec.upload_id)
-        if not upload_path.is_file():
+        upload_path = self._storage.find_upload_path(rec.upload_id)
+        if not upload_path or not upload_path.is_file():
             self._fail(rec, "Upload file is missing. It may have expired or been removed.")
             return
 
@@ -119,7 +120,12 @@ class JobManager:
             )
             return
 
-        if not summary.has_video:
+        audio_only = is_audio_only_output(out_fmt.value)
+        if audio_only:
+            if not summary.has_audio:
+                self._fail(rec, NO_AUDIO_TRACK_ERROR)
+                return
+        elif not summary.has_video:
             self._fail(rec, "No video track found. Nothing to convert.")
             return
 
@@ -127,7 +133,7 @@ class JobManager:
             self._fail(rec, "File is empty.")
             return
 
-        ext = out_fmt.value if out_fmt != OutputFormat.MPEG else "mpeg"
+        ext = output_file_extension(out_fmt.value)
         base_name = Path(rec.public.original_filename).stem
         safe = sanitize_filename(f"{base_name}.{ext}")
         job_dir = self._storage.job_dir(job_id)
@@ -257,10 +263,9 @@ class JobManager:
         out: list[JobPublic] = []
         for item in req.items:
             uid = item.upload_id
-            if not self._storage.upload_path(uid).is_file():
+            up_path = self._storage.find_upload_path(uid)
+            if not up_path or not up_path.is_file():
                 raise FileNotFoundError(f"Upload not found: {uid}")
-
-            up_path = self._storage.upload_path(uid)
             size = up_path.stat().st_size
             jid = uuid.uuid4()
             now = _utcnow()

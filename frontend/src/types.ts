@@ -8,7 +8,7 @@ export type JobStatus =
   | "failed"
   | "cancelled";
 
-export type OutputFormat = "mp4" | "mkv" | "avi" | "mov" | "mpeg" | "gif";
+export type OutputFormat = "mp4" | "mkv" | "avi" | "mov" | "mpeg" | "gif" | "mp3" | "wav";
 export type QualityProfile = "source_like" | "high" | "balanced" | "small";
 
 export interface JobProgress {
@@ -65,6 +65,10 @@ export interface SettingsPublic {
   default_quality_profile: string;
   gif_max_duration_sec: number;
   supported_formats: string[];
+  supported_input_formats: string[];
+  supported_output_video_formats: string[];
+  supported_output_audio_formats: string[];
+  input_accept: string;
 }
 
 export interface HealthResponse {

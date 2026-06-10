@@ -9,6 +9,14 @@ import {
   uploadFiles,
   zipUrl,
 } from "./api";
+import {
+  AUDIO_OUTPUT_FORMATS,
+  INPUT_ACCEPT,
+  VIDEO_OUTPUT_FORMATS,
+  isAllowedInputFilename,
+  isAudioOnlyOutput,
+  normalizeOutputFormat,
+} from "./formats";
 import { t, type Lang } from "./i18n";
 import type { JobPublic, JobStatus } from "./types";
 
@@ -162,14 +170,14 @@ export default function App() {
 
   function onPickFiles(fs: FileList | null) {
     if (!fs || fs.length === 0) return;
-    const arr = Array.from(fs).filter((f) => f.name.toLowerCase().endsWith(".webm"));
+    const arr = Array.from(fs).filter((f) => isAllowedInputFilename(f.name));
     setPendingFiles((p) => [...p, ...arr]);
   }
 
   async function onConvert() {
     setError(null);
     if (pendingFiles.length === 0) {
-      setError("Add at least one .webm file.");
+      setError(t(lang, "addVideoFile"));
       return;
     }
     setBusy(true);
@@ -181,7 +189,7 @@ export default function App() {
       }));
       const created = await createJobs({
         items,
-        output_format: format,
+        output_format: normalizeOutputFormat(format),
         quality,
         advanced: {
           resolution: res,
@@ -230,6 +238,7 @@ export default function App() {
 
   const aviWarn = format === "avi";
   const gifWarn = format === "gif";
+  const audioOnly = isAudioOnlyOutput(format);
 
   return (
     <div className="page">
@@ -258,6 +267,7 @@ export default function App() {
       {error && <div className="banner error">{error}</div>}
       {aviWarn && <div className="banner warn">{t(lang, "aviWarn")}</div>}
       {gifWarn && <div className="banner warn">{t(lang, "gifWarn")}</div>}
+      {audioOnly && <div className="banner warn">{t(lang, "audioOnlyHint")}</div>}
 
       <section className="card" style={{ marginBottom: 14 }}>
         <div
@@ -278,7 +288,7 @@ export default function App() {
             {t(lang, "or")}
           </p>
           <div style={{ marginTop: 10 }}>
-            <input type="file" accept=".webm,video/webm" multiple onChange={(e) => onPickFiles(e.target.files)} />
+            <input type="file" accept={INPUT_ACCEPT} multiple onChange={(e) => onPickFiles(e.target.files)} />
           </div>
         </div>
 
@@ -292,25 +302,36 @@ export default function App() {
           <div>
             <label>{t(lang, "format")}</label>
             <select value={format} onChange={(e) => setFormat(e.target.value)}>
-              <option value="mp4">mp4</option>
-              <option value="mkv">mkv</option>
-              <option value="avi">avi</option>
-              <option value="mov">mov</option>
-              <option value="mpeg">mpeg</option>
-              <option value="gif">gif</option>
+              <optgroup label={t(lang, "formatVideo")}>
+                {VIDEO_OUTPUT_FORMATS.map((f) => (
+                  <option key={f} value={f}>
+                    {f}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label={t(lang, "formatAudio")}>
+                {AUDIO_OUTPUT_FORMATS.map((f) => (
+                  <option key={f} value={f}>
+                    {f}
+                  </option>
+                ))}
+              </optgroup>
             </select>
           </div>
-          <div>
-            <label>{t(lang, "quality")}</label>
-            <select value={quality} onChange={(e) => setQuality(e.target.value)}>
-              <option value="source_like">source-like</option>
-              <option value="high">high</option>
-              <option value="balanced">balanced</option>
-              <option value="small">small</option>
-            </select>
-          </div>
+          {!audioOnly && (
+            <div>
+              <label>{t(lang, "quality")}</label>
+              <select value={quality} onChange={(e) => setQuality(e.target.value)}>
+                <option value="source_like">source-like</option>
+                <option value="high">high</option>
+                <option value="balanced">balanced</option>
+                <option value="small">small</option>
+              </select>
+            </div>
+          )}
         </div>
 
+        {!audioOnly && (
         <details className="adv">
           <summary>{t(lang, "advanced")}</summary>
           <div className="row" style={{ marginTop: 12 }}>
@@ -341,6 +362,7 @@ export default function App() {
             </div>
           </div>
         </details>
+        )}
 
         <div style={{ marginTop: 14 }}>
           <button className="btn primary" type="button" disabled={busy || pendingFiles.length === 0} onClick={onConvert}>

@@ -5,7 +5,9 @@ from enum import Enum
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.formats import normalize_output_format
 
 
 class JobStatus(str, Enum):
@@ -26,6 +28,8 @@ class OutputFormat(str, Enum):
     MOV = "mov"
     MPEG = "mpeg"
     GIF = "gif"
+    MP3 = "mp3"
+    WAV = "wav"
 
 
 class QualityProfile(str, Enum):
@@ -127,6 +131,13 @@ class CreateJobsRequest(BaseModel):
     quality: QualityProfile
     advanced: AdvancedOptions | None = None
 
+    @field_validator("output_format", mode="before")
+    @classmethod
+    def normalize_output_format_alias(cls, v: object) -> object:
+        if isinstance(v, str):
+            return normalize_output_format(v)
+        return v
+
 
 class CreateJobsResponse(BaseModel):
     jobs: list[JobPublic]
@@ -157,6 +168,10 @@ class SettingsPublic(BaseModel):
     default_quality_profile: str
     gif_max_duration_sec: int
     supported_formats: list[str]
+    supported_input_formats: list[str]
+    supported_output_video_formats: list[str]
+    supported_output_audio_formats: list[str]
+    input_accept: str
 
 
 class SystemStatusResponse(BaseModel):

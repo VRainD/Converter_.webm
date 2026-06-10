@@ -11,6 +11,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from app.formats import NO_AUDIO_TRACK_ERROR
 from app.models.schemas import (
     AdvancedOptions,
     AudioMode,
@@ -110,6 +111,15 @@ def build_ffmpeg_args(
         audio_keep = False
 
     base_before: list[str] = ["ffmpeg", "-hide_banner", "-y", "-i", str(input_path)]
+
+    if output_format in (OutputFormat.MP3, OutputFormat.WAV):
+        if not has_audio:
+            raise ValueError(NO_AUDIO_TRACK_ERROR)
+        if output_format == OutputFormat.MP3:
+            args = base_before + ["-vn", "-acodec", "libmp3lame", "-ab", "192k", str(output_path)]
+            return args, "Audio-only export: video track omitted."
+        args = base_before + ["-vn", "-acodec", "pcm_s16le", str(output_path)]
+        return args, "Audio-only export: video track omitted."
 
     if output_format == OutputFormat.MP4:
         args = base_before + vf_arg

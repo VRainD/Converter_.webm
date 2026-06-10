@@ -38,9 +38,18 @@ class StorageService:
         for d in (settings.uploads_dir, settings.outputs_dir, settings.temp_dir, settings.logs_dir):
             d.mkdir(parents=True, exist_ok=True)
 
-    def upload_path(self, upload_id: uuid.UUID) -> Path:
-        p = self._s.uploads_dir / f"{upload_id}.webm"
+    def upload_path(self, upload_id: uuid.UUID, extension: str) -> Path:
+        ext = extension.lower() if extension.startswith(".") else f".{extension.lower()}"
+        p = self._s.uploads_dir / f"{upload_id}{ext}"
         return ensure_under(self._s.uploads_dir, p)
+
+    def find_upload_path(self, upload_id: uuid.UUID) -> Path | None:
+        matches = [
+            p
+            for p in self._s.uploads_dir.glob(f"{upload_id}.*")
+            if p.is_file() and p.suffix.lower() != ".json"
+        ]
+        return matches[0] if matches else None
 
     def job_dir(self, job_id: uuid.UUID) -> Path:
         p = self._s.outputs_dir / str(job_id)
@@ -57,8 +66,8 @@ class StorageService:
         return ensure_under(self._s.temp_dir, p)
 
     def delete_upload(self, upload_id: uuid.UUID) -> None:
-        p = self.upload_path(upload_id)
-        if p.is_file():
+        p = self.find_upload_path(upload_id)
+        if p and p.is_file():
             p.unlink()
 
     def delete_job_artifacts(self, job_id: uuid.UUID) -> None:
