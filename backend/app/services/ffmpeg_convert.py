@@ -69,6 +69,41 @@ def _combine_vf(parts: list[str]) -> list[str]:
     return ["-vf", filt]
 
 
+def _input_prefix(large_source: bool) -> list[str]:
+    opts = ["-threads", "0"]
+    if large_source:
+        opts += ["-probesize", "64M", "-analyzeduration", "120M"]
+    return opts
+
+
+def _audio_demux_options() -> list[str]:
+    """Demux audio only — FFmpeg skips video decode."""
+    return ["-vn", "-sn", "-dn", "-map", "0:a:0?", "-max_muxing_queue_size", "9999"]
+
+
+def _build_audio_extract_args(
+    output_format: OutputFormat,
+    output_path: Path,
+    audio_codec: str | None,
+) -> tuple[list[str], str]:
+    common = _audio_demux_options()
+    if output_format == OutputFormat.MP3:
+        if audio_codec == "mp3":
+            return common + ["-c:a", "copy", str(output_path)], (
+                "Audio-only export: stream copy from MP3 source (fast, no re-encode)."
+            )
+        return common + ["-c:a", "libmp3lame", "-b:a", "192k", "-threads", "0", str(output_path)], (
+            "Audio-only export: video track skipped, audio re-encoded to MP3."
+        )
+    if audio_codec in ("pcm_s16le", "pcm_s24le", "pcm_s16be", "pcm_s24be"):
+        return common + ["-c:a", "copy", str(output_path)], (
+            "Audio-only export: PCM stream copy to WAV (fast, no re-encode)."
+        )
+    return common + ["-c:a", "pcm_s16le", "-threads", "0", str(output_path)], (
+        "Audio-only export: video track skipped, audio decoded to WAV PCM."
+    )
+
+
 def build_ffmpeg_args(
     input_path: Path,
     output_path: Path,
@@ -81,6 +116,8 @@ def build_ffmpeg_args(
     has_audio: bool,
     advanced: AdvancedOptions | None,
     gif_max_duration_sec: int,
+    audio_codec: str | None = None,
+    large_source: bool = False,
 ) -> tuple[list[str], str | None]:
     """Returns argv list and optional human-readable warning."""
     adv = advanced or AdvancedOptions()
@@ -110,16 +147,13 @@ def build_ffmpeg_args(
             warning = "GIF has no audio; audio was omitted."
         audio_keep = False
 
-    base_before: list[str] = ["ffmpeg", "-hide_banner", "-y", "-i", str(input_path)]
+    base_before: list[str] = ["ffmpeg", "-hide_banner", "-y"] + _input_prefix(large_source) + ["-i", str(input_path)]
 
     if output_format in (OutputFormat.MP3, OutputFormat.WAV):
         if not has_audio:
             raise ValueError(NO_AUDIO_TRACK_ERROR)
-        if output_format == OutputFormat.MP3:
-            args = base_before + ["-vn", "-acodec", "libmp3lame", "-ab", "192k", str(output_path)]
-            return args, "Audio-only export: video track omitted."
-        args = base_before + ["-vn", "-acodec", "pcm_s16le", str(output_path)]
-        return args, "Audio-only export: video track omitted."
+        audio_args, msg = _build_audio_extract_args(output_format, output_path, audio_codec)
+        return base_before + audio_args, msg
 
     if output_format == OutputFormat.MP4:
         args = base_before + vf_arg

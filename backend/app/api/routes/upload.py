@@ -18,6 +18,13 @@ from app.services.storage import sanitize_filename
 router = APIRouter(tags=["upload"])
 
 
+def _format_size_limit(mb: int) -> str:
+    if mb >= 1024:
+        gb = mb / 1024
+        return f"{gb:.0f} GB" if gb == int(gb) else f"{gb:.1f} GB"
+    return f"{mb} MB"
+
+
 @router.post("/api/upload", response_model=UploadResponse)
 async def upload_files(
     settings: SettingsDep,
@@ -27,7 +34,9 @@ async def upload_files(
     if not files:
         raise HTTPException(status_code=400, detail="No files uploaded.")
 
-    max_bytes = settings.max_upload_mb * 1024 * 1024
+    max_bytes = settings.max_upload_bytes
+    chunk = settings.upload_chunk_bytes
+    limit_label = _format_size_limit(settings.max_upload_mb)
     uploads: list[UploadEntry] = []
     allowed = ", ".join(sorted(ALLOWED_INPUT_EXTENSIONS))
 
@@ -50,7 +59,6 @@ async def upload_files(
         uid = uuid.uuid4()
         dest = storage.upload_path(uid, ext)
         size = 0
-        chunk = 1024 * 1024
         try:
             async with aiofiles.open(dest, "wb") as out:
                 while True:
@@ -65,7 +73,7 @@ async def upload_files(
                             pass
                         raise HTTPException(
                             status_code=413,
-                            detail=f"File too large. Maximum size is {settings.max_upload_mb} MB.",
+                            detail=f"File too large. Maximum size is {limit_label}.",
                         )
                     await out.write(part)
         except HTTPException:
@@ -81,7 +89,7 @@ async def upload_files(
             raise HTTPException(status_code=400, detail=f"File is empty: {name}")
 
         try:
-            probe_media(dest)
+            probe_media(dest, timeout=settings.ffprobe_timeout_sec)
         except ValueError as e:
             try:
                 dest.unlink()
@@ -98,12 +106,12 @@ async def upload_files(
 
 
 @router.get("/api/uploads/{upload_id}/metadata", response_model=MediaSummary)
-async def upload_metadata(upload_id: UUID, storage: StorageDep) -> MediaSummary:
+async def upload_metadata(upload_id: UUID, settings: SettingsDep, storage: StorageDep) -> MediaSummary:
     dest = storage.find_upload_path(upload_id)
     if not dest or not dest.is_file():
         raise HTTPException(status_code=404, detail="Upload not found.")
     try:
-        summary, _ = probe_media(dest)
+        summary, _ = probe_media(dest, timeout=settings.ffprobe_timeout_sec)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     return summary

@@ -9,6 +9,14 @@ function readLang(): Lang {
   return v === "ru" ? "ru" : "en";
 }
 
+function formatLimitMb(mb: number): string {
+  if (mb >= 1024) {
+    const gb = mb / 1024;
+    return gb % 1 === 0 ? `${gb} GB` : `${gb.toFixed(1)} GB`;
+  }
+  return `${mb} MB`;
+}
+
 export default function SystemStatus() {
   const [lang] = useState<Lang>(readLang);
   const [data, setData] = useState<SystemStatusResponse | null>(null);
@@ -45,7 +53,7 @@ export default function SystemStatus() {
           </p>
           <h2>Limits</h2>
           <ul className="list">
-            <li>Max upload: {data.settings.max_upload_mb} MB</li>
+            <li>Max upload: {formatLimitMb(data.settings.max_upload_mb)}</li>
             <li>Concurrent jobs: {data.settings.max_concurrent_jobs}</li>
             <li>GIF max duration: {data.settings.gif_max_duration_sec}s</li>
           </ul>

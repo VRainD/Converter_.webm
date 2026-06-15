@@ -26,18 +26,39 @@ def _parse_fps(r_frame_rate: str | None) -> float | None:
         return None
 
 
-def probe_media(path: Path, timeout: int = 120) -> tuple[MediaSummary, dict[str, Any]]:
-    cmd = [
-        "ffprobe",
-        "-v",
-        "error",
-        "-print_format",
-        "json",
-        "-show_format",
-        "-show_streams",
-        str(path),
-    ]
-    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
+def probe_timeout_for_size(size_bytes: int, base_timeout: int = 120) -> int:
+    """Scale ffprobe timeout for multi-GB sources."""
+    if size_bytes >= 20 * 1024**3:
+        return max(base_timeout, 900)
+    if size_bytes >= 5 * 1024**3:
+        return max(base_timeout, 600)
+    if size_bytes >= 1024**3:
+        return max(base_timeout, 300)
+    return base_timeout
+
+
+def probe_media(
+    path: Path,
+    timeout: int = 120,
+    large_file: bool | None = None,
+) -> tuple[MediaSummary, dict[str, Any]]:
+    try:
+        stat_size = path.stat().st_size
+    except OSError:
+        stat_size = 0
+
+    if large_file is None:
+        large_file = stat_size >= 512 * 1024 * 1024  # 512 MB+
+
+    effective_timeout = probe_timeout_for_size(stat_size, timeout)
+
+    cmd: list[str] = ["ffprobe", "-v", "error", "-print_format", "json", "-show_format", "-show_streams"]
+    if large_file:
+        # Read container headers only — avoids scanning entire multi-GB files.
+        cmd += ["-probesize", "64M", "-analyzeduration", "120M"]
+    cmd.append(str(path))
+
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=effective_timeout, check=False)
     if proc.returncode != 0:
         err = (proc.stderr or proc.stdout or "").strip() or "ffprobe failed"
         raise ValueError(err)
@@ -54,9 +75,9 @@ def probe_media(path: Path, timeout: int = 120) -> tuple[MediaSummary, dict[str,
 
     size = fmt.get("size")
     try:
-        file_size = int(size) if size is not None else path.stat().st_size
-    except (TypeError, ValueError, OSError):
-        file_size = path.stat().st_size if path.exists() else 0
+        file_size = int(size) if size is not None else stat_size
+    except (TypeError, ValueError):
+        file_size = stat_size if stat_size else 0
 
     v_stream = next((s for s in streams if s.get("codec_type") == "video"), None)
     a_stream = next((s for s in streams if s.get("codec_type") == "audio"), None)

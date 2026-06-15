@@ -99,7 +99,7 @@ class JobManager:
         rec.public.status = JobStatus.ANALYZING
         rec.public.updated_at = _utcnow()
         try:
-            summary, _ = probe_media(upload_path)
+            summary, _ = probe_media(upload_path, timeout=self._s.ffprobe_timeout_sec)
         except ValueError as e:
             self._fail(rec, f"Could not read media file: {e}")
             return
@@ -147,6 +147,8 @@ class JobManager:
 
         advanced = rec.advanced
 
+        large_source = summary.file_size_bytes >= 512 * 1024 * 1024
+
         try:
             argv, warn = build_ffmpeg_args(
                 upload_path,
@@ -160,6 +162,8 @@ class JobManager:
                 summary.has_audio,
                 advanced,
                 self._s.gif_max_duration_sec,
+                audio_codec=summary.audio_codec,
+                large_source=large_source,
             )
         except ValueError as e:
             self._fail(rec, str(e))
